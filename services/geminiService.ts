@@ -1,9 +1,35 @@
 import { GoogleGenAI, Type, GenerateContentResponse, Modality } from "@google/genai";
 import { Character, Scene, VideoSettings, FinalVideoMeta, VideoQuality, StoryConcept, AspectRatio, ScenePrompt, EvolvingAsset, VideoAnalysis, SceneCharacter, SceneBackground, SceneCamera, SceneFoley, SceneFX } from "../types";
 
-// NOTE: This service assumes process.env.API_KEY is available in the environment.
+// NOTE: This service prefers a browser-provided API key (saved in localStorage under
+// 'GEMINI_API_KEY' or inside a saved 'GEMINI_API_KEY_JSON'), and falls back to
+// process.env.API_KEY for server-side usage.
 
-const getGenAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getStoredApiKey = (): string | undefined => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = localStorage.getItem('GEMINI_API_KEY');
+      if (raw && raw.trim()) return raw.trim();
+
+      const rawJson = localStorage.getItem('GEMINI_API_KEY_JSON');
+      if (rawJson) {
+        try {
+          const parsed = JSON.parse(rawJson);
+          if (parsed && typeof parsed.api_key === 'string') {
+            return parsed.api_key;
+          }
+        } catch (e) {
+          // ignore parse errors, fallback below
+        }
+      }
+    }
+  } catch (e) {
+    // localStorage might be unavailable in some environments; ignore and fallback
+  }
+  return process.env.API_KEY as string | undefined;
+};
+
+const getGenAI = () => new GoogleGenAI({ apiKey: getStoredApiKey() });
 
 export const analyzeYouTubeVideo = async (url: string): Promise<VideoAnalysis> => {
     const systemInstruction = `You are an expert YouTube video analyst. Your task is to analyze the video provided directly via a file URI and structure your findings as a JSON object.
@@ -776,10 +802,12 @@ export const checkVideoOperationStatus = async (operation: any): Promise<any> =>
 
 export const fetchVideoData = async (uri: string): Promise<string> => {
     try {
-        if (!process.env.API_KEY) {
-            throw new Error("API_KEY environment variable not set.");
-        }
-        const response = await fetch(`${uri}&key=${process.env.API_KEY}`);
+    const apiKey = getStoredApiKey();
+    if (!apiKey) {
+      throw new Error("API key not set. Please provide GEMINI_API_KEY in localStorage or set process.env.API_KEY.");
+    }
+    const sep = uri.includes('?') ? '&' : '?';
+    const response = await fetch(`${uri}${sep}key=${encodeURIComponent(apiKey)}`);
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Failed to fetch video data: ${response.status} ${response.statusText} - ${errorText}`);

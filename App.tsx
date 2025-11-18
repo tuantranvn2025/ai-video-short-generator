@@ -156,18 +156,30 @@ const App: React.FC = () => {
   // --- API KEY and ERROR HANDLING ---
   useEffect(() => {
     const checkApiKey = async () => {
-      if (typeof window.aistudio?.hasSelectedApiKey !== 'function') {
-        console.warn("aistudio SDK not found. Assuming no key selected.");
-        setIsLoading(false);
-        setApiKeySelected(false);
-        return;
-      }
+      // Prefer a user-supplied key in localStorage for browser usage.
       try {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        setApiKeySelected(hasKey);
-      } catch (e) {
-        console.error("Error checking for API key:", e);
-        setApiKeySelected(false);
+        const savedKey = localStorage.getItem('GEMINI_API_KEY');
+        const savedJson = localStorage.getItem('GEMINI_API_KEY_JSON');
+        if (savedKey || savedJson) {
+          setApiKeySelected(true);
+          setIsLoading(false);
+          return;
+        }
+
+        if (typeof window.aistudio?.hasSelectedApiKey !== 'function') {
+          console.warn("aistudio SDK not found. Assuming no key selected.");
+          setIsLoading(false);
+          setApiKeySelected(false);
+          return;
+        }
+
+        try {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          setApiKeySelected(hasKey);
+        } catch (e) {
+          console.error("Error checking for API key:", e);
+          setApiKeySelected(false);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -236,6 +248,45 @@ const App: React.FC = () => {
   const handleSaveElevenLabsKey = () => {
     localStorage.setItem(ELEVENLABS_API_KEY_STORAGE, elevenLabsApiKey);
     addNotification('ElevenLabs API Key saved.', 'success');
+  };
+
+  // --- Gemini / Google AI Key handling (manual entry or JSON upload) ---
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>('');
+  const geminiJsonInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveGeminiKey = () => {
+    if (!geminiKeyInput || geminiKeyInput.trim() === '') {
+      addNotification('Please enter a valid API key before saving.', 'error');
+      return;
+    }
+    localStorage.setItem('GEMINI_API_KEY', geminiKeyInput.trim());
+    addNotification('Gemini API key saved to localStorage.', 'success');
+    setApiKeySelected(true);
+  };
+
+  const handleGeminiJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      // Common patterns: some JSONs include an `api_key` field
+      if (json.api_key && typeof json.api_key === 'string') {
+        localStorage.setItem('GEMINI_API_KEY', json.api_key);
+        addNotification('API key extracted from JSON and saved.', 'success');
+        setApiKeySelected(true);
+      } else {
+        // Save the raw JSON for advanced usage; note it may not work in-browser.
+        localStorage.setItem('GEMINI_API_KEY_JSON', JSON.stringify(json));
+        addNotification('JSON key file saved. If it contains an `api_key` field it will be used automatically.', 'info');
+        setApiKeySelected(true);
+      }
+    } catch (err) {
+      console.error('Failed to read JSON key file:', err);
+      addNotification('Failed to read the JSON key file. Make sure it is valid JSON.', 'error');
+    } finally {
+      if (geminiJsonInputRef.current) geminiJsonInputRef.current.value = '';
+    }
   };
 
   const handleGenerateSceneAudio = async (sceneId: string) => {
@@ -752,44 +803,79 @@ ${scene.prompt.complete_prompt}
     }
   
     if (!apiKeySelected) {
+      const savedKey = typeof window !== 'undefined' ? localStorage.getItem('GEMINI_API_KEY') : null;
+      const savedJson = typeof window !== 'undefined' ? localStorage.getItem('GEMINI_API_KEY_JSON') : null;
       return (
-          <div className="min-h-screen w-full flex items-center justify-center bg-gray-900 text-white p-4">
-              <div className="text-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-lg border border-gray-700">
-                  <KeyIcon className="w-16 h-16 mx-auto text-indigo-400 mb-4" />
-                  <h2 className="text-2xl font-bold mb-2">Google AI API Key Required</h2>
-                  <p className="text-gray-400 mb-6">
-                      This application uses Google's Veo model for video generation, which requires you to select your own Google AI API key. Your key is used to track usage and billing.
-                  </p>
-                  <button
-                      onClick={async () => {
-                          setIsOpeningKeySelector(true);
-                          try {
-                              await window.aistudio.openSelectKey();
-                              setApiKeySelected(true); // Assume success to avoid race conditions
-                          } catch (e) {
-                              console.error("Could not open API key selection:", e);
-                              addNotification("Could not open the API key selection dialog.", 'error');
-                          } finally {
-                            setIsOpeningKeySelector(false);
-                          }
-                      }}
-                      disabled={isOpeningKeySelector}
-                      className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-wait text-white font-bold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center mx-auto text-lg w-64 min-h-[56px]"
-                  >
-                      {isOpeningKeySelector ? (
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                      ) : (
-                          'Select Google AI API Key'
-                      )}
-                  </button>
-                  <p className="text-xs text-gray-500 mt-4">
-                      For more information on billing, please visit the{' '}
-                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">
-                          official documentation
-                      </a>.
-                  </p>
+        <div className="min-h-screen w-full flex items-center justify-center bg-gray-900 text-white p-4">
+          <div className="text-center p-8 bg-gray-800 rounded-lg shadow-xl max-w-lg border border-gray-700">
+            <KeyIcon className="w-16 h-16 mx-auto text-indigo-400 mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Provide Google AI API Key</h2>
+            <p className="text-gray-400 mb-4">
+              You can paste a Google API key directly, upload a JSON key file, or use the AI Studio selector if available.
+            </p>
+
+            <div className="mb-4">
+              <input
+                type="password"
+                value={geminiKeyInput}
+                onChange={(e) => setGeminiKeyInput(e.target.value)}
+                placeholder="Enter your Gemini / Google AI API key"
+                className="w-full p-3 bg-gray-900 border border-gray-600 rounded-md mb-2"
+              />
+              <div className="flex gap-2 justify-center">
+                <button onClick={handleSaveGeminiKey} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">
+                  Save Key
+                </button>
+                <button
+                  onClick={async () => {
+                    setIsOpeningKeySelector(true);
+                    try {
+                      if (window.aistudio?.openSelectKey) {
+                        await window.aistudio.openSelectKey();
+                        addNotification('Google AI API Key selection prompt opened. The new key will be used for subsequent requests.', 'info');
+                        setApiKeySelected(true);
+                      } else {
+                        addNotification('AI Studio key selector is not available in this environment.', 'error');
+                      }
+                    } catch (e) {
+                      console.error('Could not open API key selection:', e);
+                      addNotification('Could not open the API key selection dialog.', 'error');
+                    } finally {
+                      setIsOpeningKeySelector(false);
+                    }
+                  }}
+                  disabled={isOpeningKeySelector}
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md"
+                >
+                  {isOpeningKeySelector ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : 'Use AI Studio Selector'}
+                </button>
               </div>
+            </div>
+
+            <div className="my-4">— or —</div>
+
+            <div className="mb-4">
+              <input ref={geminiJsonInputRef} type="file" accept="application/json" onChange={handleGeminiJsonFile} className="mx-auto" />
+              <p className="text-xs text-gray-500 mt-2">Upload a JSON key file. If it contains an `api_key` field it will be extracted.</p>
+            </div>
+
+            {(savedKey || savedJson) && (
+              <div className="mt-4 p-3 bg-gray-900/50 rounded-md border border-gray-700 text-sm text-left">
+                <p className="font-semibold text-white">Saved Key Info</p>
+                {savedKey && <p className="text-gray-300">A raw API key is saved (masked): ****{savedKey.slice(-6)}</p>}
+                {savedJson && !savedKey && <p className="text-gray-300">A JSON credentials object is saved in localStorage.</p>}
+                <p className="text-xs text-gray-500 mt-2">You can remove these items from the browser's developer tools if needed.</p>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 mt-4">
+              For more information on billing, please visit the{' '}
+              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">
+                official documentation
+              </a>.
+            </p>
           </div>
+        </div>
       );
     }
     

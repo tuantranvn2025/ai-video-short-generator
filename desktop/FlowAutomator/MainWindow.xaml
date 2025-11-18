@@ -1,0 +1,54 @@
+<Window x:Class="FlowAutomator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        mc:Ignorable="d"
+        Title="Flow Automator" Height="720" Width="1100">
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" Spacing="8">
+            <Button x:Name="BtnOpenLogin" Width="140" Click="BtnOpenLogin_Click">Open Login (WebView)</Button>
+            <Button x:Name="BtnCaptureCookies" Width="140" Click="BtnCaptureCookies_Click">Capture Cookies</Button>
+            <Button x:Name="BtnSaveCookies" Width="140" Click="BtnSaveCookies_Click">Save Cookies</Button>
+            <Button x:Name="BtnStartAutomation" Width="160" Click="BtnStartAutomation_Click">Start Automation (Playwright)</Button>
+            <Button x:Name="BtnClearSession" Width="140" Click="BtnClearSession_Click">Clear Session</Button>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="2*" />
+            </Grid.ColumnDefinitions>
+
+            <wv2:WebView2 x:Name="webView" Grid.Column="0" />
+
+            <StackPanel Grid.Column="1" Margin="8" VerticalAlignment="Stretch">
+                <TextBlock Text="Captured Cookies" FontWeight="Bold" Margin="0,0,0,8" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="TxtCookies" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" Height="180" IsReadOnly="True" />
+                </ScrollViewer>
+
+                <TextBlock Text="Video URL (paste if known)" FontWeight="Bold" Margin="0,8,0,4" />
+                <TextBox x:Name="TxtVideoUrl" Width="Auto" Height="28" />
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Spacing="8">
+                    <Button x:Name="BtnDownloadUrl" Width="140" Click="BtnDownloadUrl_Click">Download URL</Button>
+                    <Button x:Name="BtnPlayDownloaded" Width="140" Click="BtnPlayDownloaded_Click">Play Downloaded</Button>
+                </StackPanel>
+
+                <TextBlock Text="Status" FontWeight="Bold" Margin="0,8,0,4" />
+                <TextBlock x:Name="TxtStatus" Text="Idle" TextWrapping="Wrap" />
+
+                <TextBlock Text="Player" FontWeight="Bold" Margin="0,8,0,4" />
+                <MediaElement x:Name="mediaPlayer" Height="220" LoadedBehavior="Manual" UnloadedBehavior="Stop" />
+
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
